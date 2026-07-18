@@ -76,6 +76,7 @@
           <span class="streak-sub-label">jours tenus</span>
         </div>
       </div>
+      <div class="item-streaks" id="itemStreaks"></div>
     </section>
 
     <section class="card quick-log-card">
@@ -138,9 +139,8 @@
     <form id="dayForm">
       <input type="hidden" id="dayDate">
       <div class="field">
-        <span>Type</span>
+        <span>Type <em>(un ou plusieurs — aucune case = jour tenu)</em></span>
         <div class="type-choice" id="typeChoice">
-          <button type="button" class="type-opt" data-type="">Tenu (rien à signaler)</button>
           <button type="button" class="type-opt" data-type="relapse_no_stim">Craquage — sans stimulation</button>
           <button type="button" class="type-opt" data-type="relapse_erotica">Craquage — lecture érotique</button>
           <button type="button" class="type-opt" data-type="relapse_porn">Craquage — porno</button>
@@ -152,7 +152,7 @@
         <textarea id="dayNote" rows="2" placeholder="Contexte, déclencheur, ressenti..."></textarea>
       </label>
       <div class="modal-actions">
-        <button type="button" id="deleteDayBtn" class="btn-danger hidden">Supprimer l'entrée</button>
+        <button type="button" id="deleteDayBtn" class="btn-danger hidden">Tout effacer ce jour</button>
         <div class="modal-actions-right">
           <button type="button" class="btn-secondary" data-close-modal>Annuler</button>
           <button type="submit" class="btn-primary">Enregistrer</button>

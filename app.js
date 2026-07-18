@@ -5,8 +5,11 @@
 
 const ENTRIES_KEY = 'cap_entries_v1';
 const SETTINGS_KEY = 'cap_settings_v1';
+const NOTES_KEY = 'cap_notes_v1';
 
 const RELAPSE_TYPES = ['relapse_no_stim', 'relapse_erotica', 'relapse_porn'];
+// Ordre = priorité d'affichage sur le calendrier (le plus "fort" gagne la couleur de la case)
+const TYPE_ORDER = ['relapse_porn', 'relapse_erotica', 'relapse_no_stim', 'partner'];
 const TYPE_LABELS = {
   relapse_no_stim: 'Sans stimulation',
   relapse_erotica: 'Lecture érotique',
@@ -39,6 +42,14 @@ function loadEntries() {
 }
 function saveEntries(entries) { localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries)); }
 
+function loadNotes() {
+  try {
+    const raw = localStorage.getItem(NOTES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) { return {}; }
+}
+function saveNotes(notes) { localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); }
+
 function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -49,6 +60,18 @@ function saveSettings(settings) { localStorage.setItem(SETTINGS_KEY, JSON.string
 
 let entries = loadEntries();
 let settings = loadSettings();
+let notes = loadNotes();
+
+// Migration : les anciennes versions stockaient une note par entrée (un seul type/jour).
+// On la reporte vers le nouveau stockage de notes par jour si besoin, une seule fois.
+(function migrateNotes() {
+  let changed = false;
+  for (const e of entries) {
+    if (e.note && !notes[e.date]) { notes[e.date] = e.note; changed = true; }
+    delete e.note;
+  }
+  if (changed) { saveNotes(notes); saveEntries(entries); }
+})();
 
 /* ---------- Utilitaires de dates ---------- */
 
@@ -78,13 +101,29 @@ const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','a
    Calculs : séries, stats
    ============================================================ */
 
-function entryFor(iso) { return entries.find(e => e.date === iso) || null; }
+function entriesForDate(iso) { return entries.filter(e => e.date === iso); }
+function hasType(iso, type) { return entries.some(e => e.date === iso && e.type === type); }
 
 function breakingEntriesSorted() {
-  return entries
-    .filter(e => RELAPSE_TYPES.includes(e.type) || (settings.partnerBreaksStreak && e.type === 'partner'))
-    .slice()
-    .sort((a, b) => fromISO(a.date) - fromISO(b.date));
+  const dates = new Set(
+    entries
+      .filter(e => RELAPSE_TYPES.includes(e.type) || (settings.partnerBreaksStreak && e.type === 'partner'))
+      .map(e => e.date)
+  );
+  return [...dates].sort((a, b) => fromISO(a) - fromISO(b)).map(date => ({ date }));
+}
+
+// Nombre de jours depuis la dernière occurrence de chaque type (indépendamment des autres)
+function computeItemStreaks() {
+  const today = new Date();
+  const result = {};
+  for (const type of TYPE_ORDER) {
+    const dates = entries.filter(e => e.type === type).map(e => fromISO(e.date));
+    if (!dates.length) { result[type] = null; continue; }
+    const last = new Date(Math.max(...dates));
+    result[type] = Math.max(0, daysBetween(last, today));
+  }
+  return result;
 }
 
 function computeStreaks() {
@@ -106,7 +145,7 @@ function computeStreaks() {
 function computeStats() {
   const today = new Date();
   const totalDays = Math.max(1, daysBetween(fromISO(settings.trackingStart), today) + 1);
-  const relapseDays = entries.filter(e => RELAPSE_TYPES.includes(e.type)).length;
+  const relapseDays = new Set(entries.filter(e => RELAPSE_TYPES.includes(e.type)).map(e => e.date)).size;
   const successRate = Math.round(((totalDays - relapseDays) / totalDays) * 100);
   const counts = {
     relapse_no_stim: entries.filter(e => e.type === 'relapse_no_stim').length,
@@ -140,12 +179,24 @@ function renderDashboard() {
   const captions = ['série en cours'];
   document.getElementById('streakCaption').textContent = current === 0 ? 'nouveau départ' : 'série en cours';
 
-  // Boutons rapides : état du jour
-  const todayEntry = entryFor(todayISO());
+  // Boutons rapides : état du jour (plusieurs peuvent être actifs en même temps)
+  const todayEntries = entriesForDate(todayISO());
   document.querySelectorAll('.quick-btn').forEach(btn => {
-    btn.classList.toggle('active-today', !!todayEntry && todayEntry.type === btn.dataset.log);
+    btn.classList.toggle('active-today', todayEntries.some(e => e.type === btn.dataset.log));
   });
-  document.getElementById('clearTodayBtn').classList.toggle('hidden', !todayEntry);
+  document.getElementById('clearTodayBtn').classList.toggle('hidden', todayEntries.length === 0);
+
+  // Séries par item
+  const itemStreaks = computeItemStreaks();
+  const itemBox = document.getElementById('itemStreaks');
+  itemBox.innerHTML = TYPE_ORDER.map(type => {
+    const val = itemStreaks[type];
+    return `
+      <div class="item-streak">
+        <span class="item-streak-value">${val === null ? '—' : val}</span>
+        <span class="item-streak-label">depuis${type === 'partner' ? '' : ' craquage'}<br>${TYPE_LABELS[type].toLowerCase()}</span>
+      </div>`;
+  }).join('');
 
   // Barres de répartition
   const bars = document.getElementById('statsBars');
@@ -185,9 +236,14 @@ function renderCalendar() {
     if (isSameDay(d, today)) btn.classList.add('today');
 
     const iso = toISO(d);
-    const entry = entryFor(iso);
-    if (entry) {
-      btn.classList.add(entry.type);
+    const dayEntries = entriesForDate(iso);
+    if (dayEntries.length) {
+      const primaryType = TYPE_ORDER.find(t => dayEntries.some(e => e.type === t));
+      btn.classList.add(primaryType);
+      if (dayEntries.length > 1) {
+        btn.classList.add('multi');
+        btn.title = dayEntries.map(e => TYPE_LABELS[e.type]).join(' + ');
+      }
     } else if (d > today || d < trackingStart) {
       btn.classList.add('future');
     } else {
@@ -202,18 +258,21 @@ function renderCalendar() {
 function renderJournal() {
   const list = document.getElementById('journalList');
   const empty = document.getElementById('journalEmpty');
-  const sorted = [...entries].sort((a, b) => fromISO(b.date) - fromISO(a.date));
-  empty.classList.toggle('hidden', sorted.length > 0);
-  list.innerHTML = sorted.map(e => {
-    const d = fromISO(e.date);
+  const dates = [...new Set(entries.map(e => e.date))].sort((a, b) => fromISO(b) - fromISO(a));
+  empty.classList.toggle('hidden', dates.length > 0);
+  list.innerHTML = dates.map(date => {
+    const d = fromISO(date);
     const label = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+    const dayTypes = TYPE_ORDER.filter(t => hasType(date, t));
+    const note = notes[date];
+    const tags = dayTypes.map(t => `<span class="journal-item-tag tag-${t}">${TYPE_LABELS[t]}</span>`).join('');
     return `
-      <li class="journal-item" data-date="${e.date}">
+      <li class="journal-item" data-date="${date}">
         <div>
           <div class="journal-item-date">${label}</div>
-          ${e.note ? `<div class="journal-item-note">${escapeHtml(e.note)}</div>` : ''}
+          ${note ? `<div class="journal-item-note">${escapeHtml(note)}</div>` : ''}
         </div>
-        <span class="journal-item-tag tag-${e.type}">${TYPE_LABELS[e.type]}</span>
+        <div class="journal-item-tags">${tags}</div>
       </li>`;
   }).join('');
   list.querySelectorAll('.journal-item').forEach(li => {
@@ -241,12 +300,11 @@ document.querySelectorAll('.quick-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const type = btn.dataset.log;
     const iso = todayISO();
-    const existing = entryFor(iso);
-    if (existing && existing.type === type) {
-      entries = entries.filter(e => e.date !== iso);
-      showToast('Saisie du jour annulée.');
+    if (hasType(iso, type)) {
+      removeEntry(iso, type);
+      showToast('Retiré.');
     } else {
-      upsertEntry(iso, type, existing ? existing.note : '');
+      addEntry(iso, type);
       showToast('Enregistré.');
     }
     saveEntries(entries);
@@ -255,20 +313,21 @@ document.querySelectorAll('.quick-btn').forEach(btn => {
 });
 
 document.getElementById('clearTodayBtn').addEventListener('click', () => {
-  entries = entries.filter(e => e.date !== todayISO());
+  const iso = todayISO();
+  entries = entries.filter(e => e.date !== iso);
+  delete notes[iso];
   saveEntries(entries);
+  saveNotes(notes);
   renderAll();
   showToast('Saisie du jour effacée.');
 });
 
-function upsertEntry(iso, type, note) {
-  const existing = entries.find(e => e.date === iso);
-  if (existing) {
-    existing.type = type;
-    existing.note = note || '';
-  } else {
-    entries.push({ id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()), date: iso, type, note: note || '' });
-  }
+function addEntry(iso, type) {
+  if (hasType(iso, type)) return;
+  entries.push({ id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + type, date: iso, type });
+}
+function removeEntry(iso, type) {
+  entries = entries.filter(e => !(e.date === iso && e.type === type));
 }
 
 /* ============================================================
@@ -276,38 +335,42 @@ function upsertEntry(iso, type, note) {
    ============================================================ */
 
 const dayModal = document.getElementById('dayModal');
-let selectedType = '';
+let selectedTypes = new Set();
 
 function openDayModal(iso) {
   document.getElementById('dayDate').value = iso;
-  const entry = entryFor(iso);
-  selectedType = entry ? entry.type : '';
+  const dayEntries = entriesForDate(iso);
+  selectedTypes = new Set(dayEntries.map(e => e.type));
   document.getElementById('dayModalTitle').textContent = fromISO(iso).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-  document.getElementById('dayNote').value = entry ? entry.note || '' : '';
+  document.getElementById('dayNote').value = notes[iso] || '';
   document.querySelectorAll('#typeChoice .type-opt').forEach(opt => {
-    opt.classList.toggle('active', opt.dataset.type === selectedType);
+    opt.classList.toggle('active', selectedTypes.has(opt.dataset.type));
   });
-  document.getElementById('deleteDayBtn').classList.toggle('hidden', !entry);
+  document.getElementById('deleteDayBtn').classList.toggle('hidden', dayEntries.length === 0 && !notes[iso]);
   dayModal.classList.remove('hidden');
 }
 
 document.getElementById('typeChoice').addEventListener('click', (e) => {
   const opt = e.target.closest('.type-opt');
   if (!opt) return;
-  selectedType = opt.dataset.type;
-  document.querySelectorAll('#typeChoice .type-opt').forEach(o => o.classList.toggle('active', o === opt));
+  const type = opt.dataset.type;
+  if (selectedTypes.has(type)) selectedTypes.delete(type); else selectedTypes.add(type);
+  opt.classList.toggle('active', selectedTypes.has(type));
 });
 
 document.getElementById('dayForm').addEventListener('submit', (e) => {
   e.preventDefault();
   const iso = document.getElementById('dayDate').value;
   const note = document.getElementById('dayNote').value.trim();
-  if (!selectedType) {
-    entries = entries.filter(x => x.date !== iso);
-  } else {
-    upsertEntry(iso, selectedType, note);
+
+  for (const type of TYPE_ORDER) {
+    if (selectedTypes.has(type)) addEntry(iso, type);
+    else removeEntry(iso, type);
   }
+  if (note) notes[iso] = note; else delete notes[iso];
+
   saveEntries(entries);
+  saveNotes(notes);
   dayModal.classList.add('hidden');
   renderAll();
   showToast('Enregistré.');
@@ -316,7 +379,9 @@ document.getElementById('dayForm').addEventListener('submit', (e) => {
 document.getElementById('deleteDayBtn').addEventListener('click', () => {
   const iso = document.getElementById('dayDate').value;
   entries = entries.filter(x => x.date !== iso);
+  delete notes[iso];
   saveEntries(entries);
+  saveNotes(notes);
   dayModal.classList.add('hidden');
   renderAll();
   showToast('Entrée supprimée.');
@@ -376,7 +441,7 @@ document.querySelectorAll('[data-close-modal]').forEach(btn => {
    ============================================================ */
 
 document.getElementById('exportBtn').addEventListener('click', () => {
-  const data = { entries, settings: { ...settings, pinHash: undefined }, exportedAt: new Date().toISOString() };
+  const data = { entries, notes, settings: { ...settings, pinHash: undefined }, exportedAt: new Date().toISOString() };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -398,8 +463,10 @@ document.getElementById('importFile').addEventListener('change', (e) => {
       if (!Array.isArray(data.entries)) throw new Error('Format invalide');
       if (!confirm(`Importer ${data.entries.length} entrée(s) ? Cela remplacera les données actuelles.`)) return;
       entries = data.entries;
+      notes = data.notes && typeof data.notes === 'object' ? data.notes : {};
       settings = { ...settings, ...(data.settings || {}) };
       saveEntries(entries);
+      saveNotes(notes);
       saveSettings(settings);
       applyTheme();
       renderAll();

@@ -129,6 +129,18 @@ body {
 .streak-sub-value { font-weight: 700; font-size: 1.2rem; }
 .streak-sub-label { font-size: 0.7rem; color: var(--ink-muted); }
 
+.item-streaks {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.item-streak { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.item-streak-value { font-family: var(--font-display); font-weight: 600; font-size: 1.3rem; color: var(--ink); }
+.item-streak-label { font-size: 0.62rem; color: var(--ink-muted); line-height: 1.3; margin-top: 2px; }
+
 /* Quick log */
 .quick-buttons {
   display: grid;
@@ -182,6 +194,15 @@ body {
 .day-cell.relapse_erotica { background: var(--erotica); color: #fff; font-weight: 700; }
 .day-cell.relapse_porn { background: var(--porn); color: #fff; font-weight: 700; }
 .day-cell.partner { background: var(--partner); color: #fff; font-weight: 700; }
+.day-cell.multi::after {
+  content: '';
+  position: absolute;
+  bottom: 4px; right: 4px;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.25);
+}
 
 .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; font-size: 0.7rem; color: var(--ink-muted); }
 .legend-item { display: flex; align-items: center; gap: 5px; }
@@ -209,7 +230,8 @@ body {
 }
 .journal-item-date { font-weight: 600; font-size: 0.85rem; }
 .journal-item-note { font-size: 0.72rem; color: var(--ink-muted); margin-top: 2px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.journal-item-tag { font-size: 0.7rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; color: #fff; white-space: nowrap; }
+.journal-item-tags { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.journal-item-tag { font-size: 0.68rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; color: #fff; white-space: nowrap; }
 .tag-relapse_no_stim { background: var(--no-stim); }
 .tag-relapse_erotica { background: var(--erotica); }
 .tag-relapse_porn { background: var(--porn); }
