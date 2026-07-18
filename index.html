@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cap</title>
+<meta name="description" content="Suivi personnel d'objectifs et de séries.">
+<meta name="theme-color" content="#1F2C28">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Écran de verrouillage -->
+<div id="lockScreen" class="lock-screen hidden">
+  <div class="lock-box">
+    <div class="lock-icon">●</div>
+    <p id="lockPrompt">Entrez votre code</p>
+    <div class="pin-dots" id="pinDots">
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="pin-pad">
+      <button class="pin-key" data-key="1">1</button>
+      <button class="pin-key" data-key="2">2</button>
+      <button class="pin-key" data-key="3">3</button>
+      <button class="pin-key" data-key="4">4</button>
+      <button class="pin-key" data-key="5">5</button>
+      <button class="pin-key" data-key="6">6</button>
+      <button class="pin-key" data-key="7">7</button>
+      <button class="pin-key" data-key="8">8</button>
+      <button class="pin-key" data-key="9">9</button>
+      <button class="pin-key ghost" data-key="clear">Effacer</button>
+      <button class="pin-key" data-key="0">0</button>
+      <button class="pin-key ghost" data-key="back">⌫</button>
+    </div>
+    <p id="lockError" class="lock-error hidden">Code incorrect</p>
+  </div>
+</div>
+
+<div class="app hidden" id="appRoot">
+
+  <header class="topbar">
+    <div class="brand">Cap</div>
+    <div class="topbar-actions">
+      <button id="exportBtn" class="icon-btn" title="Exporter les données" aria-label="Exporter">⇩</button>
+      <button id="importBtn" class="icon-btn" title="Importer les données" aria-label="Importer">⇧</button>
+      <button id="settingsBtn" class="icon-btn" title="Réglages" aria-label="Réglages">⚙</button>
+      <button id="lockNowBtn" class="icon-btn" title="Verrouiller" aria-label="Verrouiller">●</button>
+      <input type="file" id="importFile" accept="application/json" hidden>
+    </div>
+  </header>
+
+  <main>
+    <section class="card streak-card">
+      <div class="streak-main">
+        <span class="streak-number" id="currentStreak">0</span>
+        <span class="streak-unit">jours</span>
+      </div>
+      <p class="streak-caption" id="streakCaption">série en cours</p>
+      <div class="streak-sub">
+        <div class="streak-sub-item">
+          <span class="streak-sub-value" id="bestStreak">0</span>
+          <span class="streak-sub-label">meilleure série</span>
+        </div>
+        <div class="streak-sub-item">
+          <span class="streak-sub-value" id="totalDays">0</span>
+          <span class="streak-sub-label">jours suivis</span>
+        </div>
+        <div class="streak-sub-item">
+          <span class="streak-sub-value" id="successRate">—</span>
+          <span class="streak-sub-label">jours tenus</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card quick-log-card">
+      <h2>Aujourd'hui</h2>
+      <div class="quick-buttons">
+        <button class="quick-btn quick-relapse-no-stim" data-log="relapse_no_stim">Craquage<br><span>sans stimulation</span></button>
+        <button class="quick-btn quick-relapse-erotica" data-log="relapse_erotica">Craquage<br><span>lecture érotique</span></button>
+        <button class="quick-btn quick-relapse-porn" data-log="relapse_porn">Craquage<br><span>porno</span></button>
+        <button class="quick-btn quick-partner" data-log="partner">Rapport<br><span>avec ma compagne</span></button>
+      </div>
+      <button id="clearTodayBtn" class="link-btn hidden">Effacer la saisie du jour</button>
+    </section>
+
+    <section class="card calendar-card">
+      <div class="calendar-nav">
+        <button id="prevMonth" class="icon-btn" aria-label="Mois précédent">‹</button>
+        <div class="calendar-nav-center">
+          <h2 id="monthLabel">—</h2>
+          <button id="todayBtn" class="link-btn">aujourd'hui</button>
+        </div>
+        <button id="nextMonth" class="icon-btn" aria-label="Mois suivant">›</button>
+      </div>
+      <div class="weekdays">
+        <span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span>
+      </div>
+      <div class="calendar-grid" id="calendarGrid"></div>
+      <div class="legend">
+        <span class="legend-item"><i class="dot dot-clean"></i>Tenu</span>
+        <span class="legend-item"><i class="dot dot-no-stim"></i>Sans stim.</span>
+        <span class="legend-item"><i class="dot dot-erotica"></i>Érotisme</span>
+        <span class="legend-item"><i class="dot dot-porn"></i>Porno</span>
+        <span class="legend-item"><i class="dot dot-partner"></i>Compagne</span>
+      </div>
+    </section>
+
+    <section class="card stats-card">
+      <h2>Répartition</h2>
+      <div class="bars" id="statsBars"></div>
+    </section>
+
+    <section class="card journal-card">
+      <div class="journal-header">
+        <h2>Historique</h2>
+      </div>
+      <ul id="journalList" class="journal-list"></ul>
+      <p id="journalEmpty" class="empty-hint hidden">Aucune entrée pour l'instant.</p>
+    </section>
+
+    <p class="privacy-note">🔒 Toutes les données restent stockées localement, sur cet appareil, dans ce navigateur. Rien n'est envoyé sur un serveur. Le code d'accès protège l'ouverture de l'app mais n'est pas un vrai chiffrement : quelqu'un ayant accès aux outils de développement du navigateur pourrait techniquement lire les données. Utilisez « Exporter » pour garder une sauvegarde.</p>
+  </main>
+</div>
+
+<!-- Modale de log / édition d'un jour -->
+<div id="dayModal" class="modal-overlay hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dayModalTitle">
+    <div class="modal-header">
+      <h3 id="dayModalTitle">Journée</h3>
+      <button class="icon-btn" data-close-modal aria-label="Fermer">✕</button>
+    </div>
+    <form id="dayForm">
+      <input type="hidden" id="dayDate">
+      <div class="field">
+        <span>Type</span>
+        <div class="type-choice" id="typeChoice">
+          <button type="button" class="type-opt" data-type="">Tenu (rien à signaler)</button>
+          <button type="button" class="type-opt" data-type="relapse_no_stim">Craquage — sans stimulation</button>
+          <button type="button" class="type-opt" data-type="relapse_erotica">Craquage — lecture érotique</button>
+          <button type="button" class="type-opt" data-type="relapse_porn">Craquage — porno</button>
+          <button type="button" class="type-opt" data-type="partner">Rapport avec ma compagne</button>
+        </div>
+      </div>
+      <label class="field">
+        <span>Note <em>(optionnel, privé)</em></span>
+        <textarea id="dayNote" rows="2" placeholder="Contexte, déclencheur, ressenti..."></textarea>
+      </label>
+      <div class="modal-actions">
+        <button type="button" id="deleteDayBtn" class="btn-danger hidden">Supprimer l'entrée</button>
+        <div class="modal-actions-right">
+          <button type="button" class="btn-secondary" data-close-modal>Annuler</button>
+          <button type="submit" class="btn-primary">Enregistrer</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modale réglages -->
+<div id="settingsModal" class="modal-overlay hidden">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+    <div class="modal-header">
+      <h3 id="settingsModalTitle">Réglages</h3>
+      <button class="icon-btn" data-close-modal aria-label="Fermer">✕</button>
+    </div>
+    <form id="settingsForm">
+      <label class="field">
+        <span>Date de début du suivi</span>
+        <input type="date" id="trackingStart" required>
+      </label>
+      <label class="field checkbox-field">
+        <input type="checkbox" id="partnerBreaksStreak">
+        <span>Un rapport avec ma compagne interrompt la série en cours</span>
+      </label>
+      <label class="field checkbox-field">
+        <input type="checkbox" id="darkMode">
+        <span>Mode sombre</span>
+      </label>
+      <div class="field">
+        <span>Code d'accès</span>
+        <div class="settings-pin-row">
+          <button type="button" id="setPinBtn" class="btn-secondary">Définir / modifier le code</button>
+          <button type="button" id="removePinBtn" class="btn-secondary">Retirer le code</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <div class="modal-actions-right">
+          <button type="button" class="btn-secondary" data-close-modal>Fermer</button>
+          <button type="submit" class="btn-primary">Enregistrer</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modale définition du PIN -->
+<div id="pinSetupModal" class="modal-overlay hidden">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h3>Nouveau code à 4 chiffres</h3>
+      <button class="icon-btn" data-close-modal aria-label="Fermer">✕</button>
+    </div>
+    <div class="pin-dots" id="setupPinDots">
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <p id="setupPinPrompt" class="lock-error hidden">Entrez le code</p>
+    <div class="pin-pad">
+      <button class="pin-key" data-setup-key="1">1</button>
+      <button class="pin-key" data-setup-key="2">2</button>
+      <button class="pin-key" data-setup-key="3">3</button>
+      <button class="pin-key" data-setup-key="4">4</button>
+      <button class="pin-key" data-setup-key="5">5</button>
+      <button class="pin-key" data-setup-key="6">6</button>
+      <button class="pin-key" data-setup-key="7">7</button>
+      <button class="pin-key" data-setup-key="8">8</button>
+      <button class="pin-key" data-setup-key="9">9</button>
+      <button class="pin-key ghost" data-setup-key="clear">Effacer</button>
+      <button class="pin-key" data-setup-key="0">0</button>
+      <button class="pin-key ghost" data-setup-key="back">⌫</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
