@@ -141,32 +141,63 @@ body {
 .item-streak-value { font-family: var(--font-display); font-weight: 600; font-size: 1.3rem; color: var(--ink); }
 .item-streak-label { font-size: 0.62rem; color: var(--ink-muted); line-height: 1.3; margin-top: 2px; }
 
-/* Quick log */
-.quick-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.quick-btn {
+/* Quick log — compteurs par item */
+.quick-buttons { display: flex; flex-direction: column; gap: 8px; }
+.quick-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   border: 1px solid var(--border);
   background: var(--surface-alt);
   border-radius: 12px;
-  padding: 12px 8px;
-  font-family: var(--font-body);
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: var(--ink);
-  cursor: pointer;
-  text-align: center;
-  line-height: 1.4;
+  padding: 8px 8px 8px 14px;
+  border-left: 4px solid var(--border);
 }
-.quick-btn span { font-weight: 400; font-size: 0.72rem; color: var(--ink-muted); }
-.quick-btn.active-today { color: #fff; }
-.quick-relapse-no-stim.active-today { background: var(--no-stim); border-color: var(--no-stim); }
-.quick-relapse-erotica.active-today { background: var(--erotica); border-color: var(--erotica); }
-.quick-relapse-porn.active-today { background: var(--porn); border-color: var(--porn); }
-.quick-partner.active-today { background: var(--partner); border-color: var(--partner); }
-.quick-btn.active-today span { color: rgba(255,255,255,0.85); }
+.quick-row[data-type="relapse_no_stim"] { border-left-color: var(--no-stim); }
+.quick-row[data-type="relapse_erotica"] { border-left-color: var(--erotica); }
+.quick-row[data-type="relapse_porn"] { border-left-color: var(--porn); }
+.quick-row[data-type="partner"] { border-left-color: var(--partner); }
+.quick-label { font-family: var(--font-body); font-weight: 600; font-size: 0.85rem; color: var(--ink); }
+.stepper { display: flex; align-items: center; gap: 10px; }
+.stepper-btn {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.stepper-btn:active { transform: scale(0.94); }
+.stepper-count { min-width: 20px; text-align: center; font-weight: 700; font-size: 1rem; font-family: var(--font-display); }
+
+/* Statistiques */
+.stats-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+.stats-header h2 { margin: 0; }
+.period-tabs { display: flex; gap: 4px; background: var(--surface-alt); border-radius: 999px; padding: 3px; }
+.period-tab {
+  border: none; background: transparent; color: var(--ink-muted);
+  font-family: var(--font-body); font-size: 0.72rem; font-weight: 600;
+  padding: 6px 10px; border-radius: 999px; cursor: pointer;
+}
+.period-tab.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+
+/* Évolution mensuelle/annuelle */
+.trend-chart {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  align-items: end;
+  gap: 3px;
+  height: 120px;
+  margin-top: 4px;
+}
+.trend-month { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; }
+.trend-bar-stack { width: 100%; max-width: 18px; display: flex; flex-direction: column-reverse; border-radius: 3px 3px 0 0; overflow: hidden; min-height: 2px; }
+.trend-bar-seg { width: 100%; }
+.trend-month-label { font-size: 0.6rem; color: var(--ink-muted); text-transform: lowercase; }
+.trend-month.current .trend-month-label { color: var(--ink); font-weight: 700; }
 
 /* Calendar */
 .calendar-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -262,8 +293,6 @@ body {
 .checkbox-field input { width: auto; }
 
 .type-choice { display: flex; flex-direction: column; gap: 6px; }
-.type-opt { text-align: left; border: 1px solid var(--border); background: var(--surface-alt); color: var(--ink); border-radius: 10px; padding: 10px 12px; font-family: var(--font-body); font-size: 0.85rem; cursor: pointer; }
-.type-opt.active { border-color: var(--success); background: var(--success-soft); color: var(--success); font-weight: 600; }
 
 .modal-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; gap: 8px; }
 .modal-actions-right { display: flex; gap: 8px; margin-left: auto; }

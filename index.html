@@ -81,11 +81,39 @@
 
     <section class="card quick-log-card">
       <h2>Aujourd'hui</h2>
-      <div class="quick-buttons">
-        <button class="quick-btn quick-relapse-no-stim" data-log="relapse_no_stim">Craquage<br><span>sans stimulation</span></button>
-        <button class="quick-btn quick-relapse-erotica" data-log="relapse_erotica">Craquage<br><span>lecture érotique</span></button>
-        <button class="quick-btn quick-relapse-porn" data-log="relapse_porn">Craquage<br><span>porno</span></button>
-        <button class="quick-btn quick-partner" data-log="partner">Rapport<br><span>avec ma compagne</span></button>
+      <div class="quick-buttons" id="quickButtons">
+        <div class="quick-row" data-type="relapse_no_stim">
+          <span class="quick-label">Sans stimulation</span>
+          <div class="stepper">
+            <button type="button" class="stepper-btn minus" aria-label="Retirer">−</button>
+            <span class="stepper-count">0</span>
+            <button type="button" class="stepper-btn plus" aria-label="Ajouter">+</button>
+          </div>
+        </div>
+        <div class="quick-row" data-type="relapse_erotica">
+          <span class="quick-label">Lecture érotique</span>
+          <div class="stepper">
+            <button type="button" class="stepper-btn minus" aria-label="Retirer">−</button>
+            <span class="stepper-count">0</span>
+            <button type="button" class="stepper-btn plus" aria-label="Ajouter">+</button>
+          </div>
+        </div>
+        <div class="quick-row" data-type="relapse_porn">
+          <span class="quick-label">Porno</span>
+          <div class="stepper">
+            <button type="button" class="stepper-btn minus" aria-label="Retirer">−</button>
+            <span class="stepper-count">0</span>
+            <button type="button" class="stepper-btn plus" aria-label="Ajouter">+</button>
+          </div>
+        </div>
+        <div class="quick-row" data-type="partner">
+          <span class="quick-label">Avec ma compagne</span>
+          <div class="stepper">
+            <button type="button" class="stepper-btn minus" aria-label="Retirer">−</button>
+            <span class="stepper-count">0</span>
+            <button type="button" class="stepper-btn plus" aria-label="Ajouter">+</button>
+          </div>
+        </div>
       </div>
       <button id="clearTodayBtn" class="link-btn hidden">Effacer la saisie du jour</button>
     </section>
@@ -113,8 +141,30 @@
     </section>
 
     <section class="card stats-card">
-      <h2>Répartition</h2>
+      <div class="stats-header">
+        <h2>Répartition</h2>
+        <div class="period-tabs" id="periodTabs">
+          <button type="button" class="period-tab active" data-period="month">Ce mois</button>
+          <button type="button" class="period-tab" data-period="year">Cette année</button>
+          <button type="button" class="period-tab" data-period="all">Total</button>
+        </div>
+      </div>
       <div class="bars" id="statsBars"></div>
+    </section>
+
+    <section class="card trend-card">
+      <div class="calendar-nav">
+        <button id="prevYear" class="icon-btn" aria-label="Année précédente">‹</button>
+        <div class="calendar-nav-center"><h2 id="trendYearLabel">—</h2></div>
+        <button id="nextYear" class="icon-btn" aria-label="Année suivante">›</button>
+      </div>
+      <div class="trend-chart" id="trendChart"></div>
+      <div class="legend">
+        <span class="legend-item"><i class="dot dot-no-stim"></i>Sans stim.</span>
+        <span class="legend-item"><i class="dot dot-erotica"></i>Érotisme</span>
+        <span class="legend-item"><i class="dot dot-porn"></i>Porno</span>
+        <span class="legend-item"><i class="dot dot-partner"></i>Compagne</span>
+      </div>
     </section>
 
     <section class="card journal-card">
@@ -139,13 +189,42 @@
     <form id="dayForm">
       <input type="hidden" id="dayDate">
       <div class="field">
-        <span>Type <em>(un ou plusieurs — aucune case = jour tenu)</em></span>
+        <span>Occurrences ce jour-là</span>
         <div class="type-choice" id="typeChoice">
-          <button type="button" class="type-opt" data-type="relapse_no_stim">Craquage — sans stimulation</button>
-          <button type="button" class="type-opt" data-type="relapse_erotica">Craquage — lecture érotique</button>
-          <button type="button" class="type-opt" data-type="relapse_porn">Craquage — porno</button>
-          <button type="button" class="type-opt" data-type="partner">Rapport avec ma compagne</button>
+          <div class="quick-row" data-type="relapse_no_stim">
+            <span class="quick-label">Sans stimulation</span>
+            <div class="stepper">
+              <button type="button" class="stepper-btn minus" aria-label="Retirer">−</button>
+              <span class="stepper-count">0</span>
+              <button type="button" class="stepper-btn plus" aria-label="Ajouter">+</button>
+            </div>
+          </div>
+          <div class="quick-row" data-type="relapse_erotica">
+            <span class="quick-label">Lecture érotique</span>
+            <div class="stepper">
+              <button type="button" class="stepper-btn minus" aria-label="Retirer">−</button>
+              <span class="stepper-count">0</span>
+              <button type="button" class="stepper-btn plus" aria-label="Ajouter">+</button>
+            </div>
+          </div>
+          <div class="quick-row" data-type="relapse_porn">
+            <span class="quick-label">Porno</span>
+            <div class="stepper">
+              <button type="button" class="stepper-btn minus" aria-label="Retirer">−</button>
+              <span class="stepper-count">0</span>
+              <button type="button" class="stepper-btn plus" aria-label="Ajouter">+</button>
+            </div>
+          </div>
+          <div class="quick-row" data-type="partner">
+            <span class="quick-label">Avec ma compagne</span>
+            <div class="stepper">
+              <button type="button" class="stepper-btn minus" aria-label="Retirer">−</button>
+              <span class="stepper-count">0</span>
+              <button type="button" class="stepper-btn plus" aria-label="Ajouter">+</button>
+            </div>
+          </div>
         </div>
+        <span>Aucune occurrence sur les 4 lignes = jour tenu</span>
       </div>
       <label class="field">
         <span>Note <em>(optionnel, privé)</em></span>

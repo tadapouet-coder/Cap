@@ -64,11 +64,12 @@ let notes = loadNotes();
 
 // Migration : les anciennes versions stockaient une note par entrée (un seul type/jour).
 // On la reporte vers le nouveau stockage de notes par jour si besoin, une seule fois.
-(function migrateNotes() {
+(function migrateEntries() {
   let changed = false;
   for (const e of entries) {
     if (e.note && !notes[e.date]) { notes[e.date] = e.note; changed = true; }
     delete e.note;
+    if (!e.count) { e.count = 1; changed = true; }
   }
   if (changed) { saveNotes(notes); saveEntries(entries); }
 })();
@@ -102,7 +103,20 @@ const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','a
    ============================================================ */
 
 function entriesForDate(iso) { return entries.filter(e => e.date === iso); }
-function hasType(iso, type) { return entries.some(e => e.date === iso && e.type === type); }
+function countFor(iso, type) {
+  const e = entries.find(x => x.date === iso && x.type === type);
+  return e ? e.count : 0;
+}
+function hasType(iso, type) { return countFor(iso, type) > 0; }
+function setCount(iso, type, count) {
+  const existing = entries.find(x => x.date === iso && x.type === type);
+  if (count <= 0) {
+    if (existing) entries = entries.filter(x => x !== existing);
+    return;
+  }
+  if (existing) existing.count = count;
+  else entries.push({ id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + type, date: iso, type, count });
+}
 
 function breakingEntriesSorted() {
   const dates = new Set(
@@ -147,13 +161,29 @@ function computeStats() {
   const totalDays = Math.max(1, daysBetween(fromISO(settings.trackingStart), today) + 1);
   const relapseDays = new Set(entries.filter(e => RELAPSE_TYPES.includes(e.type)).map(e => e.date)).size;
   const successRate = Math.round(((totalDays - relapseDays) / totalDays) * 100);
-  const counts = {
-    relapse_no_stim: entries.filter(e => e.type === 'relapse_no_stim').length,
-    relapse_erotica: entries.filter(e => e.type === 'relapse_erotica').length,
-    relapse_porn: entries.filter(e => e.type === 'relapse_porn').length,
-    partner: entries.filter(e => e.type === 'partner').length
-  };
-  return { totalDays, successRate, counts };
+  return { totalDays, successRate };
+}
+
+function monthRangeISO(year, monthIndex0) {
+  const start = new Date(year, monthIndex0, 1);
+  const end = new Date(year, monthIndex0 + 1, 0);
+  return [toISO(start), toISO(end)];
+}
+
+function computeCountsInRange(startISO, endISO) {
+  const counts = { relapse_no_stim: 0, relapse_erotica: 0, relapse_porn: 0, partner: 0 };
+  for (const e of entries) {
+    if (e.date >= startISO && e.date <= endISO) counts[e.type] = (counts[e.type] || 0) + (e.count || 1);
+  }
+  return counts;
+}
+function sumCounts(counts) { return Object.values(counts).reduce((a, b) => a + b, 0); }
+
+function countsForPeriod(period) {
+  const today = new Date();
+  if (period === 'month') return computeCountsInRange(...monthRangeISO(today.getFullYear(), today.getMonth()));
+  if (period === 'year') return computeCountsInRange(toISO(new Date(today.getFullYear(), 0, 1)), toISO(new Date(today.getFullYear(), 11, 31)));
+  return computeCountsInRange(settings.trackingStart, todayISO());
 }
 
 /* ============================================================
@@ -162,6 +192,8 @@ function computeStats() {
 
 let viewDate = new Date();
 viewDate.setDate(1);
+let statsPeriod = 'month';
+let trendYear = new Date().getFullYear();
 
 /* ============================================================
    Rendu
@@ -175,16 +207,15 @@ function renderDashboard() {
   document.getElementById('bestStreak').textContent = best;
   document.getElementById('totalDays').textContent = stats.totalDays;
   document.getElementById('successRate').textContent = `${stats.successRate}%`;
-
-  const captions = ['série en cours'];
   document.getElementById('streakCaption').textContent = current === 0 ? 'nouveau départ' : 'série en cours';
 
-  // Boutons rapides : état du jour (plusieurs peuvent être actifs en même temps)
-  const todayEntries = entriesForDate(todayISO());
-  document.querySelectorAll('.quick-btn').forEach(btn => {
-    btn.classList.toggle('active-today', todayEntries.some(e => e.type === btn.dataset.log));
+  // Compteurs du jour
+  const iso = todayISO();
+  document.querySelectorAll('#quickButtons .quick-row').forEach(row => {
+    row.querySelector('.stepper-count').textContent = countFor(iso, row.dataset.type);
   });
-  document.getElementById('clearTodayBtn').classList.toggle('hidden', todayEntries.length === 0);
+  const todayTotal = TYPE_ORDER.reduce((s, t) => s + countFor(iso, t), 0);
+  document.getElementById('clearTodayBtn').classList.toggle('hidden', todayTotal === 0);
 
   // Séries par item
   const itemStreaks = computeItemStreaks();
@@ -198,12 +229,16 @@ function renderDashboard() {
       </div>`;
   }).join('');
 
-  // Barres de répartition
+  renderStatsBars();
+  renderTrendChart();
+}
+
+function renderStatsBars() {
+  const counts = countsForPeriod(statsPeriod);
   const bars = document.getElementById('statsBars');
-  const maxCount = Math.max(1, ...Object.values(stats.counts));
-  const order = ['relapse_no_stim', 'relapse_erotica', 'relapse_porn', 'partner'];
-  bars.innerHTML = order.map(type => {
-    const count = stats.counts[type];
+  const maxCount = Math.max(1, ...Object.values(counts));
+  bars.innerHTML = TYPE_ORDER.map(type => {
+    const count = counts[type];
     const pct = Math.round((count / maxCount) * 100);
     const colorVar = `var(${TYPE_COLORS_VAR[type]})`;
     return `
@@ -214,6 +249,41 @@ function renderDashboard() {
       </div>`;
   }).join('');
 }
+
+function renderTrendChart() {
+  document.getElementById('trendYearLabel').textContent = String(trendYear);
+  const monthsData = [];
+  for (let m = 0; m < 12; m++) monthsData.push(computeCountsInRange(...monthRangeISO(trendYear, m)));
+  const totals = monthsData.map(sumCounts);
+  const maxTotal = Math.max(1, ...totals);
+  const today = new Date();
+  const container = document.getElementById('trendChart');
+  container.innerHTML = monthsData.map((counts, idx) => {
+    const total = totals[idx];
+    const heightPct = Math.round((total / maxTotal) * 100);
+    const segs = TYPE_ORDER
+      .filter(t => counts[t] > 0)
+      .map(t => `<div class="trend-bar-seg" style="flex:${counts[t]} 0 0;background:var(${TYPE_COLORS_VAR[t]})"></div>`)
+      .join('');
+    const isCurrent = trendYear === today.getFullYear() && idx === today.getMonth();
+    return `
+      <div class="trend-month ${isCurrent ? 'current' : ''}" title="${MONTHS_FR[idx]} : ${total} au total">
+        <div class="trend-bar-stack" style="height:${heightPct}%">${segs}</div>
+        <span class="trend-month-label">${MONTHS_FR[idx].slice(0, 3)}</span>
+      </div>`;
+  }).join('');
+}
+
+document.getElementById('periodTabs').addEventListener('click', (e) => {
+  const tab = e.target.closest('.period-tab');
+  if (!tab) return;
+  statsPeriod = tab.dataset.period;
+  document.querySelectorAll('.period-tab').forEach(t => t.classList.toggle('active', t === tab));
+  renderStatsBars();
+});
+
+document.getElementById('prevYear').addEventListener('click', () => { trendYear--; renderTrendChart(); });
+document.getElementById('nextYear').addEventListener('click', () => { trendYear++; renderTrendChart(); });
 
 function renderCalendar() {
   const grid = document.getElementById('calendarGrid');
@@ -240,9 +310,10 @@ function renderCalendar() {
     if (dayEntries.length) {
       const primaryType = TYPE_ORDER.find(t => dayEntries.some(e => e.type === t));
       btn.classList.add(primaryType);
-      if (dayEntries.length > 1) {
+      const total = dayEntries.reduce((s, e) => s + (e.count || 1), 0);
+      if (total > 1) {
         btn.classList.add('multi');
-        btn.title = dayEntries.map(e => TYPE_LABELS[e.type]).join(' + ');
+        btn.title = dayEntries.map(e => `${TYPE_LABELS[e.type]}${e.count > 1 ? ` ×${e.count}` : ''}`).join(' + ');
       }
     } else if (d > today || d < trackingStart) {
       btn.classList.add('future');
@@ -263,9 +334,13 @@ function renderJournal() {
   list.innerHTML = dates.map(date => {
     const d = fromISO(date);
     const label = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
-    const dayTypes = TYPE_ORDER.filter(t => hasType(date, t));
+    const dayEntries = entriesForDate(date);
     const note = notes[date];
-    const tags = dayTypes.map(t => `<span class="journal-item-tag tag-${t}">${TYPE_LABELS[t]}</span>`).join('');
+    const tags = TYPE_ORDER
+      .map(t => dayEntries.find(e => e.type === t))
+      .filter(Boolean)
+      .map(e => `<span class="journal-item-tag tag-${e.type}">${TYPE_LABELS[e.type]}${e.count > 1 ? ` ×${e.count}` : ''}</span>`)
+      .join('');
     return `
       <li class="journal-item" data-date="${date}">
         <div>
@@ -296,20 +371,17 @@ function renderAll() {
    Saisie rapide (aujourd'hui)
    ============================================================ */
 
-document.querySelectorAll('.quick-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const type = btn.dataset.log;
-    const iso = todayISO();
-    if (hasType(iso, type)) {
-      removeEntry(iso, type);
-      showToast('Retiré.');
-    } else {
-      addEntry(iso, type);
-      showToast('Enregistré.');
-    }
-    saveEntries(entries);
-    renderAll();
-  });
+document.getElementById('quickButtons').addEventListener('click', (e) => {
+  const btn = e.target.closest('.stepper-btn');
+  if (!btn) return;
+  const row = btn.closest('.quick-row');
+  const type = row.dataset.type;
+  const iso = todayISO();
+  const current = countFor(iso, type);
+  const next = btn.classList.contains('plus') ? current + 1 : Math.max(0, current - 1);
+  setCount(iso, type, next);
+  saveEntries(entries);
+  renderAll();
 });
 
 document.getElementById('clearTodayBtn').addEventListener('click', () => {
@@ -322,40 +394,34 @@ document.getElementById('clearTodayBtn').addEventListener('click', () => {
   showToast('Saisie du jour effacée.');
 });
 
-function addEntry(iso, type) {
-  if (hasType(iso, type)) return;
-  entries.push({ id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + type, date: iso, type });
-}
-function removeEntry(iso, type) {
-  entries = entries.filter(e => !(e.date === iso && e.type === type));
-}
-
 /* ============================================================
    Modale : jour
    ============================================================ */
 
 const dayModal = document.getElementById('dayModal');
-let selectedTypes = new Set();
+let editCounts = {};
 
 function openDayModal(iso) {
   document.getElementById('dayDate').value = iso;
   const dayEntries = entriesForDate(iso);
-  selectedTypes = new Set(dayEntries.map(e => e.type));
+  editCounts = {};
+  TYPE_ORDER.forEach(t => { editCounts[t] = countFor(iso, t); });
   document.getElementById('dayModalTitle').textContent = fromISO(iso).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   document.getElementById('dayNote').value = notes[iso] || '';
-  document.querySelectorAll('#typeChoice .type-opt').forEach(opt => {
-    opt.classList.toggle('active', selectedTypes.has(opt.dataset.type));
+  document.querySelectorAll('#typeChoice .quick-row').forEach(row => {
+    row.querySelector('.stepper-count').textContent = editCounts[row.dataset.type];
   });
   document.getElementById('deleteDayBtn').classList.toggle('hidden', dayEntries.length === 0 && !notes[iso]);
   dayModal.classList.remove('hidden');
 }
 
 document.getElementById('typeChoice').addEventListener('click', (e) => {
-  const opt = e.target.closest('.type-opt');
-  if (!opt) return;
-  const type = opt.dataset.type;
-  if (selectedTypes.has(type)) selectedTypes.delete(type); else selectedTypes.add(type);
-  opt.classList.toggle('active', selectedTypes.has(type));
+  const btn = e.target.closest('.stepper-btn');
+  if (!btn) return;
+  const row = btn.closest('.quick-row');
+  const type = row.dataset.type;
+  editCounts[type] = btn.classList.contains('plus') ? editCounts[type] + 1 : Math.max(0, editCounts[type] - 1);
+  row.querySelector('.stepper-count').textContent = editCounts[type];
 });
 
 document.getElementById('dayForm').addEventListener('submit', (e) => {
@@ -363,10 +429,7 @@ document.getElementById('dayForm').addEventListener('submit', (e) => {
   const iso = document.getElementById('dayDate').value;
   const note = document.getElementById('dayNote').value.trim();
 
-  for (const type of TYPE_ORDER) {
-    if (selectedTypes.has(type)) addEntry(iso, type);
-    else removeEntry(iso, type);
-  }
+  for (const type of TYPE_ORDER) setCount(iso, type, editCounts[type]);
   if (note) notes[iso] = note; else delete notes[iso];
 
   saveEntries(entries);
